@@ -1,5 +1,3 @@
-from typing import Any
-
 import pyKRLST
 import math
 import matplotlib.pyplot as plt
@@ -9,6 +7,7 @@ from sklearn.metrics import mean_squared_error as MSE
 from sklearn.metrics import mean_absolute_error as MAE
 from scipy.stats import norm
 from sklearn.model_selection import train_test_split
+from typing import Any
 
 
 def f(x: np.ndarray) -> np.ndarray:
@@ -17,11 +16,12 @@ def f(x: np.ndarray) -> np.ndarray:
 
 def get_training_data(size: int, left: float, right: float) -> [np.ndarray, np.ndarray]:
     data = np.linspace(left, right, size)
-    X, _ = train_test_split(data, test_size=0.95)
+    X, _ = train_test_split(data, test_size=0.9)
     return np.atleast_2d(X).T, np.atleast_2d(data).T
 
 
-def evaluate(kernel, m, X, x, noise: np.ndarray = None) -> [Any, np.ndarray, np.ndarray, float, float]:
+def evaluate(kernel: Any, m: int, X: np.ndarray, x: np.ndarray, noise: np.ndarray = None) ->\
+        [Any, np.ndarray, np.ndarray, float, float]:
     c, l = 1e-5, 0.999
     mode = "B2P"
 
@@ -41,15 +41,16 @@ def evaluate(kernel, m, X, x, noise: np.ndarray = None) -> [Any, np.ndarray, np.
     return krlst, y_pred, y_std, rmse, mae
 
 
-def evaluate_vector(X: np.ndarray, x: np.ndarray, kernel, isNoisy: bool = False) -> [Any, np.ndarray, np.ndarray, float, float, float]:
-    size, index, min_rmse = 50, 0, 100
+def evaluate_vector(X: np.ndarray, x: np.ndarray, kernel: Any, isNoisy: bool = False) ->\
+        [Any, np.ndarray, np.ndarray, float, float, float]:
+    max_vector_count, index, min_rmse = 50, 0, 100
     models, preds, stds, rmses, maes = [], [], [], [], []
     noise = None
 
     if isNoisy:
         noise = norm.rvs(scale=0.1, size=len(X))
 
-    for m in range(size):
+    for m in range(max_vector_count):
         results = evaluate(kernel, m, X, x, noise)
         models.append(results[0])
         preds.append(results[1])
@@ -64,11 +65,12 @@ def evaluate_vector(X: np.ndarray, x: np.ndarray, kernel, isNoisy: bool = False)
     return models[index], preds[index], stds[index], rmses[index], maes[index], index
 
 
-def evaluate_kernel(X, x) -> [Any, np.ndarray, np.ndarray, float, float, float, float]:
+def evaluate_kernel(X: np.ndarray, x: np.ndarray) -> [Any, np.ndarray, np.ndarray, float, float, float, float]:
     models, preds, stds, rmses, maes, ms = [], [], [], [], [], []
-
     index, min_rmse, opt_kernel = 0, 100, 0
-    for kernel in np.linspace(0.001, 1.1, 10):
+    kernel_list = np.linspace(0.001, 1.1, 10)
+
+    for kernel in kernel_list:
         results = evaluate_vector(X, x, kernel)
         models.append(results[0])
         preds.append(results[1])
@@ -82,31 +84,37 @@ def evaluate_kernel(X, x) -> [Any, np.ndarray, np.ndarray, float, float, float, 
             min_rmse = rmses[index]
             opt_kernel = kernel
 
-    print(rmses)
-    draw_graph(rmses, "Dependence between RMSE and kernel parameters", np.linspace(0.001, 1.1, 10))
+    draw_graph(rmses, "Dependence between kernel parameters and RMSE", "Kernel params", "RMSE", kernel_list)
     return models[index], preds[index], stds[index], rmses[index], maes[index], ms[index], opt_kernel
+
+
+def vector_dependence(X: np.ndarray, x: np.ndarray, kernel: Any) -> None:
+    rmses = []
+    max_vector_count = 50
+    for m in range(max_vector_count):
+        results = evaluate(kernel, m, X, x)
+        rmses.append(results[3])
+    draw_graph(rmses, "Dependence between support vector count and RMSE", "Support vectors", "RMSE")
 
 
 def draw_graph(values: list, title: str, x_label: str, y_label: str, data: np.ndarray = None) -> None:
     if data is not None:
-        plt.plot(data, values)
+        plt.semilogy(data, values)
     else:
-        plt.plot(values)
+        plt.semilogy(values)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
     plt.title(title)
     plt.show()
 
 
-def draw_krlst(X, x, y_pred, y_std, krlst: Any, title: str) -> None:
+def draw_krlst(X: np.ndarray, x: np.ndarray, y_pred: np.ndarray, y_std: np.ndarray, krlst: Any, title: str) -> None:
     plt.figure(figsize=(10, 5))
     plt.plot(x, f(x), 'r:', label=r'$f(x) = sinc(x)$')
     plt.plot(krlst.Xb, krlst.mu, 'k*', markersize=20, label="Dictionary Elements")
     plt.plot(X, f(X), 'r.', markersize=15, label='Observations')
     plt.plot(x, y_pred, 'b-', label='Prediction')
-    plt.fill(np.concatenate([x, x[::-1]]),
-             np.concatenate([y_pred - 1.9600 * y_std,
-                             (y_pred + 1.9600 * y_std)[::-1]]),
+    plt.fill(np.concatenate([x, x[::-1]]), np.concatenate([y_pred - 1.9600 * y_std, (y_pred + 1.9600 * y_std)[::-1]]),
              alpha=.25, fc='b', ec='None', label='95% confidence interval')
     plt.xlabel('$x$')
     plt.ylabel('$f(x)$')
@@ -120,15 +128,17 @@ def main() -> None:
     epoch_count, size = 50, 200
     X, x = get_training_data(200, -2, 2)
 
-    # KLST-regression without noise
+    # KRLS-regression without noise
     model, y_pred, y_std, rmse, mae, m, kernel = evaluate_kernel(X, x)
-    print("KLST-regression without noise")
+    print("KRLS-regression without noise")
     print(f"Kernel param = {kernel}")
     print(f"Support vectors = {m}")
     print(f"MAE = {mae}, RMSE = {rmse}")
-    draw_krlst(X, x, y_pred, y_std, model, "KLST-regression without noise")
+    draw_krlst(X, x, y_pred, y_std, model, "KRLS-regression without noise")
 
-    # KLST-regression with noise
+    vector_dependence(X, x, kernel)
+
+    # KRLS-regression with noise
     models, preds, stds, rmses, maes, ms = [], [], [], [], [], []
 
     for epoch in range(epoch_count):
@@ -140,15 +150,15 @@ def main() -> None:
         maes.append(results[4])
         ms.append(results[5])
 
-    draw_graph(rmses, "RMSE values with using a noise")
+    draw_graph(rmses, "RMSE values with using a noise", "Iteration", "RMSE")
 
     index = np.array(rmses).argmin()
-    print("\nKLST-regression with noise and minimum RMSE")
+    print("\nKRLS-regression with noise and minimum RMSE")
     print(f"Kernel param = {kernel}")
     print(f"Support vectors = {ms[index]}")
     print(f"MAE = {maes[index]}, RMSE = {rmses[index]}")
     print(f"\nMean RMSE = {np.mean(rmses)}")
-    draw_krlst(X, x, preds[index], stds[index], models[index], "KLST-regression with noise and minimum RMSE")
+    draw_krlst(X, x, preds[index], stds[index], models[index], "KRLS-regression with noise and minimum RMSE")
 
 
 main()
