@@ -21,7 +21,7 @@ def get_training_data(size: int, left: float, right: float, train_size) -> [np.n
 
 
 def evaluate(kernel: Any, m: int, l: float, X: np.ndarray, x: np.ndarray, noise: np.ndarray = None) ->\
-        [Any, np.ndarray, np.ndarray, float, float]:
+        [Any, np.ndarray, np.ndarray, float, float, float]:
     c = 1e-5
     mode = "B2P"
 
@@ -38,13 +38,13 @@ def evaluate(kernel: Any, m: int, l: float, X: np.ndarray, x: np.ndarray, noise:
 
     mae = MAE(y_pred, f(x))
     rmse = math.sqrt(MSE(f(x), y_pred))
-    return krlst, y_pred, y, rmse, mae
+    return krlst, y_pred, y, rmse, mae, krlst.m
 
 
 def evaluate_vector(X: np.ndarray, x: np.ndarray, kernel: Any, l: float, isNoisy: bool = False) ->\
         [Any, np.ndarray, np.ndarray, float, float, float]:
     max_vector_count, index, min_rmse = 15, 0, 100
-    models, preds, ys, rmses, maes = [], [], [], [], []
+    models, preds, ys, rmses, maes, ms = [], [], [], [], [], []
     noise = None
 
     if isNoisy:
@@ -57,20 +57,21 @@ def evaluate_vector(X: np.ndarray, x: np.ndarray, kernel: Any, l: float, isNoisy
         ys.append(results[2])
         rmses.append(results[3])
         maes.append(results[4])
+        ms.append(results[5])
 
         if min_rmse > rmses[m]:
             min_rmse = rmses[m]
             index = m
 
-    return models[index], preds[index], ys[index], rmses[index], maes[index], index
+    return models[index], preds[index], ys[index], rmses[index], maes[index], ms[index]
 
 
 def evaluate_kernel(X: np.ndarray, x: np.ndarray, isNoisy: bool = False) ->\
         [Any, np.ndarray, np.ndarray, float, float, float, float]:
     models, preds, ys, rmses, maes, ms = [], [], [], [], [], []
     index, min_rmse, opt_kernel, opt_l = 0, 100, 0, 0
-    kernel_list = np.linspace(0.01, 1.1, 15)
-    l_list = np.linspace(0.1, 1, 15)
+    kernel_list = np.linspace(0.01, 2, 20)
+    l_list = np.linspace(0.001, 1, 15)
 
     for kernel in kernel_list:
         for l in l_list:
@@ -98,18 +99,26 @@ def evaluate_kernel(X: np.ndarray, x: np.ndarray, isNoisy: bool = False) ->\
         for l in l_list:
             results = evaluate_vector(X, x, opt_kernel, l)
             l_rmses.append(results[4])
-        draw_graph(l_rmses, "Dependence between sparsity parameters and RMSE", "Sparsity parameters", "RMSE", l_list)
+        draw_graph(l_rmses, "Dependence between threshold parameters and RMSE", "Threshold parameters", "RMSE", l_list)
 
     return models[index], preds[index], ys[index], rmses[index], maes[index], ms[index], opt_kernel, opt_l
 
 
 def vector_dependence(X: np.ndarray, x: np.ndarray, kernel: Any, l: float) -> None:
-    rmses = []
+    rmses, ms = [], []
     max_vector_count = 15
+    #l_list = np.linspace(0.1, 0.999, 15)
+
     for m in range(max_vector_count):
         results = evaluate(kernel, m, l, X, x)
         rmses.append(results[3])
     draw_graph(rmses, "Dependence between support vector count and RMSE", "Support vectors", "RMSE")
+
+    """for el in l_list:
+        results = evaluate_vector(X, x, kernel, el)
+        ms.append(results[5])
+    draw_graph(ms, "Dependence between sparsity parameter and support vector count", "Sparsity parameter",
+               "Support vectors", np.array([1 - l for l in l_list]))"""
 
 
 def draw_graph(values: list, title: str, x_label: str, y_label: str, data: np.ndarray = None) -> None:
@@ -126,7 +135,8 @@ def draw_graph(values: list, title: str, x_label: str, y_label: str, data: np.nd
 def draw_krlst(X: np.ndarray, x: np.ndarray, y_pred: np.ndarray, y: np.ndarray, krlst: Any, title: str) -> None:
     plt.figure(figsize=(10, 5))
     plt.plot(x, f(x), 'r:', label=r'$f(x) = sinc(x)$')
-    plt.plot(krlst.Xb, krlst.mu, 'k*', markersize=20, label="Dictionary Elements")
+    indexes = [i for i in range(len(X)) if X[i] in krlst.Xb]
+    plt.plot(krlst.Xb, [y[i] for i in indexes], 'k*', markersize=20, label="Dictionary Elements")
     plt.plot(X, y, 'm.', markersize=10, label='Observations')
     plt.plot(x, y_pred, 'b-', label='Prediction')
     plt.xlabel('$x$')

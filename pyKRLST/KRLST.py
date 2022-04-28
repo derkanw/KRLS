@@ -32,7 +32,7 @@ class KRLST:
     """
 
     def __init__(
-        self, kernel: Kernel, l: float, c: float, M: int, forgetmode: str = "B2P", jitter=1e-10
+        self, kernel: Kernel, l: float, c: float, M: int, forgetmode: str = "B2P", jitter=1e-7
     ):
         """
         Args:
